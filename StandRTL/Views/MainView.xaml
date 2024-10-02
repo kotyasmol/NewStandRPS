@@ -1,0 +1,69 @@
+﻿<hc:Window x:Class="NewStandRPS.Views.MainView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NewStandRPS"
+        mc:Ignorable="d"
+        Title="Stand Realtek" Width="1100" Height="720">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+            <RowDefinition Height="250"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="300"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Vertical" HorizontalAlignment="Right" Margin="50">
+            <Button Width="150" Height="50" Content="Начать" Margin="10"/>
+            <Button Width="150" Height="50" Content="Остановить" Margin="10"/>
+
+        </StackPanel>
+
+        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ListView Grid.Column="0" Margin="10" Style="{StaticResource ListView.Small}">
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+                <ListBoxItem Content="Пинг"/>
+            </ListView>
+            
+            <ListView Grid.Column="1" Margin="10" Style="{StaticResource ListView.Small}">
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+                <ListBoxItem Content="Логгирование"/>
+            </ListView>
+        </Grid>
+    </Grid>
+</hc:Window>
