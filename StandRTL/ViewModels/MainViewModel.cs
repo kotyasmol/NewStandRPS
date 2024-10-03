@@ -17,6 +17,7 @@ using System.IO;
 using HandyControl.Tools.Command;
 using HandyControl.Tools;
 using Newtonsoft.Json.Linq;
+using Stylet.Logging;
 
 namespace NewStandRPS.ViewModels
 {
@@ -27,8 +28,9 @@ namespace NewStandRPS.ViewModels
 
             private ModbusSerialMaster _modbusMaster;
             private SerialPort _serialPort;
+            private Logger _logger;
 
-            public ICommand ConnectCommand { get; }
+            //public ICommand ConnectCommand { get; }
             private bool _isConnected;
             public bool IsConnected
             {
@@ -40,32 +42,6 @@ namespace NewStandRPS.ViewModels
                         _isConnected = value;
                         OnPropertyChanged(nameof(IsConnected));
                     }
-                }
-            }
-            private void Connect(object parameter)
-            {
-                _serialPort = new SerialPort("COM3") // добавить выбор порта 
-                {
-                    BaudRate = 4800,
-                    Parity = Parity.None,
-                    DataBits = 8,
-                    StopBits = StopBits.One,
-                    ReadTimeout = 1000
-                };
-
-                try
-                {
-                    _serialPort.Open();
-                    _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
-                    _modbusMaster.Transport.Retries = 3;
-                    IsConnected = true;
-                    Log("Стенд подключен.");
-                    ReadRegister(2, 1);
-
-                }
-                catch (Exception ex)
-                {
-                    Log($"Невозможно подключиться: {ex.Message}");
                 }
             }
 
@@ -176,7 +152,7 @@ namespace NewStandRPS.ViewModels
                 BATLedStatus,                   // 1008 - Состояние светодиода BAT
                 ACBConnectionSwitch,            // 1009 - Ключ подключения АКБ
                 ChargingSwitch,                 // 1010 - Ключ включения зарядки
-                OptoRelay,                      // 1011 - Оптореле
+                OptoRelay,                      // 1011 - Оптореле - то самое сигма гигачад реле очень нужно  + супер важно 
                 Unused_AC_OKOptocoupler,        // 1012 - Оптрон AC_OK (не используется)
                 FullDischargeVoltage,           // 1013 - Напряжение полного отключения
                 ACBLowVoltage,                  // 1014 - Низкое напряжение АКБ
@@ -220,14 +196,37 @@ namespace NewStandRPS.ViewModels
             {
                 StartTesting(1, Config);  // Вызов метода StartTesting
             }
-            public void StartTesting(byte slaveID, TestConfigModel config)
+        public void StartTesting(byte slaveID, TestConfigModel config)
+        {
+            try
             {
+                // Подключение к устройству
+                _serialPort = new SerialPort("COM3") // добавить выбор порта
+                {
+                    BaudRate = 4800,
+                    Parity = Parity.None,
+                    DataBits = 8,
+                    StopBits = StopBits.One,
+                    ReadTimeout = 1000
+                };
+
                 try
                 {
+                    _serialPort.Open();
+                    _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
+                    _modbusMaster.Transport.Retries = 3;
+                    IsConnected = true;
+                    Log("Стенд подключен.");
+                    ReadRegister(slaveID, 1);  // Чтение тестового регистра для проверки подключения
+
+                    // Начало тестирования после подключения
+
                     if (config.IsPreheatingTestEnabled)
                     {
                         if (PreheatingTest(Config))
-                        { Log("PREHEATING TEST ПРОЙДЕН"); }
+                        {
+                            Log("PREHEATING TEST ПРОЙДЕН");
+                        }
                         else
                         {
                             Log("PREHEATING TEST: НЕ ПРОЙДЕН");
@@ -240,42 +239,66 @@ namespace NewStandRPS.ViewModels
 
                     if (config.IsRknTestEnabled)
                     {
-
                         if (RknTest(Config))
                         {
                             Log("RKN ТЕСТ ПРОЙДЕН");
                         }
-                        else { Log("RKN ТЕСТ НЕ ПРОЙДЕН"); }
+                        else
+                        {
+                            Log("RKN ТЕСТ НЕ ПРОЙДЕН");
+                        }
                     }
-                    else { Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ"); }
+                    else
+                    {
+                        Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ");
+                    }
 
                     if (config.IsBuildinTestEnabled)
                     {
-
                         if (SelfTest(Config))
                         {
-                            Log("самотетестирование успешно");
+                            Log("Самотестирование успешно");
                         }
-                        else { Log("самотестирование не пройдено"); }
+                        else
+                        {
+                            Log("Самотестирование не пройдено");
+                        }
                     }
-                    else { Log("Самотестирование не проводилось"); }
-
+                    else
+                    {
+                        Log("Самотестирование не проводилось");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Log($"Ошибка тестирования: {ex.Message}");
-                }
-                finally
-                {
-                    WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
-                    WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
-                    WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1); //или не 1?
-                    WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
-
-                    Log("Все параметры стенда возвращены в исходное состояние.");
+                    Log($"Невозможно подключиться: {ex.Message}");
                 }
             }
-            public bool PreheatingTest(TestConfigModel config)
+            catch (Exception ex)
+            {
+                Log($"Ошибка тестирования: {ex.Message}");
+            }
+            finally
+            {
+                // Завершение тестирования и закрытие соединения
+                if (_serialPort != null && _serialPort.IsOpen)
+                {
+                    _serialPort.Close();
+                    IsConnected = false;
+                    Log("Соединение закрыто.");
+                }
+
+                // Возвращение параметров стенда в исходное состояние
+                WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
+                WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
+                WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1); // или не 1?
+                WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
+
+                Log("Все параметры стенда возвращены в исходное состояние.");
+            }
+        }
+
+        public bool PreheatingTest(TestConfigModel config)
             {
                 try
                 {
@@ -404,7 +427,7 @@ namespace NewStandRPS.ViewModels
                     WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
                 }
             }
-            public bool RknTest(TestConfigModel config)
+        public bool RknTest(TestConfigModel config)
             {
                 try
                 {
@@ -639,7 +662,7 @@ namespace NewStandRPS.ViewModels
                     return false;
                 }
             }
-            public bool SelfTest(TestConfigModel config)
+        public bool SelfTest(TestConfigModel config)
             {
                 try
                 {
@@ -889,9 +912,9 @@ namespace NewStandRPS.ViewModels
                     return false;
                 }
             }
-            private bool CheckMinMaxParam(ushort registerAddress, int minValue, int maxValue, int delay)
-            {
-                try
+        private bool CheckMinMaxParam(ushort registerAddress, int minValue, int maxValue, int delay)
+        {
+           try
                 {
                     ushort value = ReadRegister(1, registerAddress);
                     Log($"Считывание {registerAddress}: {value}");
@@ -921,7 +944,7 @@ namespace NewStandRPS.ViewModels
                     return false;
                 }
             }
-            private bool CheckRpsParam(ushort registerAddress, int expectedValue, int delay)
+        private bool CheckRpsParam(ushort registerAddress, int expectedValue, int delay)
             {
                 try
                 {
@@ -962,14 +985,16 @@ namespace NewStandRPS.ViewModels
 
             public MainViewModel()
             {
-                ConnectCommand = new RelayCommand(Connect, param => !IsConnected);
                 SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
                 StartTestingCommand = new RelayCommand(StartTestCommandExecute);
 
+           // _logger = new Logger(main);
 
-                LogMessages = new ObservableCollection<string>();
+            // Пример логирования
+            //_logger.Log("Программа запущена", LogLevel.I);
+            //_logger.Log("Ошибка подключения", LogLevel.E);
 
-            }
+        }
             private void Log(string message)
             {
                 LogMessages.Add($"{DateTime.Now}: {message}");

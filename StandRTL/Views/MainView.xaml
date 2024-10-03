@@ -17,8 +17,9 @@
             <ColumnDefinition Width="300"/>
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Vertical" HorizontalAlignment="Right" Margin="50">
-            <Button Width="150" Height="50" Content="Начать" Margin="10"/>
+        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Left" Margin="94,50,0,50">
+            <Button Width="150" Height="50" Content="Начать" Margin="10" Command="{Binding  StartTestingCommand}"/>
+            <Button Content="Выбрать JSON файл" Command="{Binding SelectJsonFileCommand}" Width="150" Height="50" />
             <Button Width="150" Height="50" Content="Остановить" Margin="10"/>
 
         </StackPanel>
@@ -45,7 +46,7 @@
                 <ListBoxItem Content="Пинг"/>
                 <ListBoxItem Content="Пинг"/>
             </ListView>
-            
+
             <ListView Grid.Column="1" Margin="10" Style="{StaticResource ListView.Small}">
                 <ListBoxItem Content="Логгирование"/>
                 <ListBoxItem Content="Логгирование"/>
