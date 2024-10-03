@@ -47,7 +47,7 @@
                 <ListBoxItem Content="Пинг"/>
             </ListView>
 
-            <ListView Grid.Column="1" Margin="10" Style="{StaticResource ListView.Small}">
+            <ListView Grid.Column="1" Margin="10" ItemsSource="{Binding LogMessages}" Style="{StaticResource ListView.Small}" >
                 <ListBoxItem Content="Логгирование"/>
                 <ListBoxItem Content="Логгирование"/>
                 <ListBoxItem Content="Логгирование"/>

@@ -36,7 +36,7 @@ namespace NewStandRPS.ViewModels
             // Добавление логов в ListView
             Application.Current.Dispatcher.Invoke(() =>
             {
-                AddLogToListView(logEntry, color, level == LogLevel.S); // Форматирование для ListView
+                AddLogToListView(logEntry, color, level == LogLevel.Success); // Форматирование для ListView
             });
         }
 
@@ -82,12 +82,12 @@ namespace NewStandRPS.ViewModels
             {
                 return level switch
                 {
-                    LogLevel.E => "#ffffff", // Белый
-                    LogLevel.I => "#b4b4b4", // Серый
-                    LogLevel.W => "#ffffff", // Белый
-                    LogLevel.D => "#b4b4b4", // Серый
-                    LogLevel.C => "#b4b4b4", // Серый
-                    LogLevel.S => "#ffffff", // Белый (для жирного текста)
+                    LogLevel.Error => "#ffffff", // Белый
+                    LogLevel.Info => "#b4b4b4", // Серый
+                    LogLevel.Warning => "#ffffff", // Белый
+                    LogLevel.Debug => "#b4b4b4", // Серый
+                    LogLevel.Critical => "#b4b4b4", // Серый
+                    LogLevel.Success => "#ffffff", // Белый (для жирного текста)
                     _ => "#b4b4b4",          // По умолчанию серый
                 };
             }
@@ -95,12 +95,12 @@ namespace NewStandRPS.ViewModels
             {
                 return level switch
                 {
-                    LogLevel.E => "#ff0000", // Красный
-                    LogLevel.I => "#000000", // Черный
-                    LogLevel.W => "#ff0000", // Красный
-                    LogLevel.D => "#000000", // Черный
-                    LogLevel.C => "#0000CD", // Синий
-                    LogLevel.S => "#000000", // Черный (для жирного текста)
+                    LogLevel.Error => "#ff0000", // Красный
+                    LogLevel.Info => "#000000", // Черный
+                    LogLevel.Warning => "#ff0000", // Красный
+                    LogLevel.Debug => "#000000", // Черный
+                    LogLevel.Critical => "#0000CD", // Синий
+                    LogLevel.Success => "#000000", // Черный (для жирного текста)
                     _ => "#000000",          // По умолчанию черный
                 };
             }
@@ -110,11 +110,11 @@ namespace NewStandRPS.ViewModels
     // Уровни логов
     public enum LogLevel
     {
-        E, // Error
-        I, // Info
-        W, // Warning
-        D, // Debug
-        C, // Critical
-        S  // Success
+        Error, // Error
+        Info, // Info
+        Warning, // Warning
+        Debug, // Debug
+        Critical, // Critical
+        Success  // Success
     }
 }

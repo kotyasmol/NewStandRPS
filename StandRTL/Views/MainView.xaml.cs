@@ -17,9 +17,11 @@ namespace NewStandRPS.Views
     /// </summary>
     public partial class MainView : HandyControl.Controls.Window
     {
+        private MainViewModel _viewModel;
         public MainView()
         {
             InitializeComponent();
+            DataContext = new MainViewModel();
         }
     }
 }

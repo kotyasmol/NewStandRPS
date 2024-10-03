@@ -114,9 +114,10 @@ namespace NewStandRPS.ViewModels
                     Log("Файл конфигурации не найден. Использование конфигурации по умолчанию.");
                 }
             }
+        public ObservableCollection<string> LogMessagesi { get; set; }
 
 
-            public enum StartAddress // значения стенда слейв 2 
+        public enum StartAddress // значения стенда слейв 2 
             {
                 ACConnection = 1300,          // 1300 - Подключение AC (230V)
                 LatrConnection,               // 1301 - Подключение ЛАТР
@@ -200,8 +201,7 @@ namespace NewStandRPS.ViewModels
         {
             try
             {
-                // Подключение к устройству
-                _serialPort = new SerialPort("COM3") // добавить выбор порта
+                _serialPort = new SerialPort("COM3")
                 {
                     BaudRate = 4800,
                     Parity = Parity.None,
@@ -216,85 +216,81 @@ namespace NewStandRPS.ViewModels
                     _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
                     _modbusMaster.Transport.Retries = 3;
                     IsConnected = true;
-                    Log("Стенд подключен.");
-                    ReadRegister(slaveID, 1);  // Чтение тестового регистра для проверки подключения
-
-                    // Начало тестирования после подключения
+                    _logger.Log("Стенд подключен.", LogLevel.Info);
+                    ReadRegister(slaveID, 1);
 
                     if (config.IsPreheatingTestEnabled)
                     {
-                        if (PreheatingTest(Config))
+                        if (PreheatingTest(config))
                         {
-                            Log("PREHEATING TEST ПРОЙДЕН");
+                            _logger.Log("PREHEATING TEST ПРОЙДЕН", LogLevel.Info);
                         }
                         else
                         {
-                            Log("PREHEATING TEST: НЕ ПРОЙДЕН");
+                            _logger.Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
                         }
                     }
                     else
                     {
-                        Log("PREHEATING TEST: НЕ ПРОВОДИЛСЯ");
+                        _logger.Log("PREHEATING TEST: НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
                     }
 
                     if (config.IsRknTestEnabled)
                     {
-                        if (RknTest(Config))
+                        if (RknTest(config))
                         {
-                            Log("RKN ТЕСТ ПРОЙДЕН");
+                            _logger.Log("RKN ТЕСТ ПРОЙДЕН", LogLevel.Info);
                         }
                         else
                         {
-                            Log("RKN ТЕСТ НЕ ПРОЙДЕН");
+                            _logger.Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
                         }
                     }
                     else
                     {
-                        Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ");
+                        _logger.Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
                     }
 
                     if (config.IsBuildinTestEnabled)
                     {
-                        if (SelfTest(Config))
+                        if (SelfTest(config))
                         {
-                            Log("Самотестирование успешно");
+                            _logger.Log("Самотестирование успешно", LogLevel.Info);
                         }
                         else
                         {
-                            Log("Самотестирование не пройдено");
+                            _logger.Log("Самотестирование не пройдено", LogLevel.Error);
                         }
                     }
                     else
                     {
-                        Log("Самотестирование не проводилось");
+                        _logger.Log("Самотестирование не проводилось", LogLevel.Warning);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log($"Невозможно подключиться: {ex.Message}");
+                    _logger.Log($"Невозможно подключиться: {ex.Message}", LogLevel.Error);
                 }
             }
             catch (Exception ex)
             {
-                Log($"Ошибка тестирования: {ex.Message}");
+                _logger.Log($"Ошибка тестирования: {ex.Message}", LogLevel.Error);
             }
             finally
             {
-                // Завершение тестирования и закрытие соединения
                 if (_serialPort != null && _serialPort.IsOpen)
                 {
                     _serialPort.Close();
                     IsConnected = false;
-                    Log("Соединение закрыто.");
+                    _logger.Log("Соединение закрыто.", LogLevel.Info);
                 }
 
-                // Возвращение параметров стенда в исходное состояние
                 WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
                 WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
-                WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1); // или не 1?
+                WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1);
                 WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
 
-                Log("Все параметры стенда возвращены в исходное состояние.");
+                _logger.Log("Все параметры стенда возвращены в исходное состояние.", LogLevel.Info);
             }
         }
 
@@ -983,55 +979,33 @@ namespace NewStandRPS.ViewModels
                 return result == MessageBoxResult.Yes;
             }
 
-            public MainViewModel()
-            {
-                SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
-                StartTestingCommand = new RelayCommand(StartTestCommandExecute);
+        public MainViewModel()
+        {
+            LogMessagesi = new ObservableCollection<string>();
+            _logger = new Logger("C:/Users/kotyo/Desktop/NewStandRPS/NewStandRPS/log.txt"); // Корректный путь к файлу лога
 
-           // _logger = new Logger(main);
+            SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
+            StartTestingCommand = new RelayCommand(StartTestCommandExecute);
 
-            // Пример логирования
-            //_logger.Log("Программа запущена", LogLevel.I);
-            //_logger.Log("Ошибка подключения", LogLevel.E);
-
+            _logger.Log("Программа запущена", LogLevel.Info);
         }
-            private void Log(string message)
-            {
-                LogMessages.Add($"{DateTime.Now}: {message}");
-            }
-            protected void OnPropertyChanged(string propertyName)
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            }
+        private void Log(string message)
+        {
+            LogMessages.Add($"{DateTime.Now}: {message}");
+        }
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
 
-            public event PropertyChangedEventHandler PropertyChanged; // Для обновления GUI
-            public ObservableCollection<string> LogMessages { get; private set; }
+        public event PropertyChangedEventHandler PropertyChanged; // Для обновления GUI
+        public ObservableCollection<string> LogMessages { get; private set; }
 
-            public class RelayCommand : ICommand
-            {
-                private readonly Action<object> _execute;
-                private readonly Predicate<object> _canExecute;
 
-                public RelayCommand(Action<object> execute, Predicate<object> canExecute = null)
-                {
-                    _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-                    _canExecute = canExecute;
-                }
-
-                public bool CanExecute(object parameter) => _canExecute?.Invoke(parameter) ?? true;
-
-                public void Execute(object parameter) => _execute(parameter);
-
-                public event EventHandler CanExecuteChanged
-                {
-                    add => CommandManager.RequerySuggested += value;
-                    remove => CommandManager.RequerySuggested -= value;
-                }
-            }
         public void Dispose()
         {
             // 
         }
     }
     
-    }
+}
