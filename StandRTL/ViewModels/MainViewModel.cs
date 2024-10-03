@@ -18,6 +18,7 @@ using HandyControl.Tools.Command;
 using HandyControl.Tools;
 using Newtonsoft.Json.Linq;
 using Stylet.Logging;
+using System.Windows.Controls;
 
 namespace NewStandRPS.ViewModels
 {
@@ -30,7 +31,7 @@ namespace NewStandRPS.ViewModels
             private SerialPort _serialPort;
             private Logger _logger;
 
-            //public ICommand ConnectCommand { get; }
+
             private bool _isConnected;
             public bool IsConnected
             {
@@ -73,8 +74,8 @@ namespace NewStandRPS.ViewModels
                 if (openFileDialog.ShowDialog() == true)
                 {
                     JsonFilePath = openFileDialog.FileName;
-                    Log($"Выбран файл: {JsonFilePath}");
-                }
+                _logger.Log("Лог выбран.", LogLevel.Info);
+            }
             }
             private void LoadConfig()
             {
@@ -114,7 +115,7 @@ namespace NewStandRPS.ViewModels
                     Log("Файл конфигурации не найден. Использование конфигурации по умолчанию.");
                 }
             }
-        public ObservableCollection<string> LogMessagesi { get; set; }
+
 
 
         public enum StartAddress // значения стенда слейв 2 
@@ -217,7 +218,7 @@ namespace NewStandRPS.ViewModels
                     _modbusMaster.Transport.Retries = 3;
                     IsConnected = true;
                     _logger.Log("Стенд подключен.", LogLevel.Info);
-                    ReadRegister(slaveID, 1);
+                    ReadRegister(1, 1);
 
                     if (config.IsPreheatingTestEnabled)
                     {
@@ -979,19 +980,20 @@ namespace NewStandRPS.ViewModels
                 return result == MessageBoxResult.Yes;
             }
 
+
+
+
+        public ObservableCollection<string> LogMessage { get; private set; } = new ObservableCollection<string>();
         public MainViewModel()
         {
-            LogMessagesi = new ObservableCollection<string>();
-            _logger = new Logger("C:/Users/kotyo/Desktop/NewStandRPS/NewStandRPS/log.txt"); // Корректный путь к файлу лога
-
+            _logger = new Logger(LogMessage, "C:/Users/kotyo/Desktop/log.txt");  // Инициализация логгера с ObservableCollection
             SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
             StartTestingCommand = new RelayCommand(StartTestCommandExecute);
-
-            _logger.Log("Программа запущена", LogLevel.Info);
         }
+
         private void Log(string message)
         {
-            LogMessages.Add($"{DateTime.Now}: {message}");
+            //LogMessages.Add($"{DateTime.Now}: {message}");
         }
         protected void OnPropertyChanged(string propertyName)
         {
@@ -1007,5 +1009,4 @@ namespace NewStandRPS.ViewModels
             // 
         }
     }
-    
 }

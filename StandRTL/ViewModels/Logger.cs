@@ -1,43 +1,34 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 
 namespace NewStandRPS.ViewModels
 {
     public class Logger
     {
-        private ListView _logListView; // ListView для отображения логов
-        private string _logFilePath = "log.txt"; // Путь к файлу лога
+        private ObservableCollection<string> _logMessages;
+        private string _logFilePath;
         private bool _useDarkTheme = false; // Переключение темы 
 
-        public Logger(ListView logListView)
+        public Logger(ObservableCollection<string> logMessages, string logFilePath)
         {
-            _logListView = logListView;
+            _logMessages = logMessages;
+            _logFilePath = logFilePath;
         }
 
-        // Метод для логирования событий
+        // Метод для логирования событий с уровнем логирования
         public void Log(string message, LogLevel level)
         {
-            string color = GetLogColor(level);
             string timestamp = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
-            string logEntry = $"{timestamp} {message}";
+            string logEntry = $"{timestamp} [{level}] {message}";
 
             // Запись в файл
             WriteLogToFile(logEntry);
 
-            // Добавление логов в ListView
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                AddLogToListView(logEntry, color, level == LogLevel.Success); // Форматирование для ListView
-            });
+            // Добавление логов в коллекцию с цветом
+            string coloredLogEntry = ApplyColorToLogEntry(logEntry, level);
+            _logMessages.Add(coloredLogEntry);
         }
 
         // Запись лога в файл
@@ -56,23 +47,11 @@ namespace NewStandRPS.ViewModels
             }
         }
 
-        // Добавление лога в ListView с цветом текста
-        private void AddLogToListView(string logEntry, string color, bool isBold)
+        // Применение цвета к логам в зависимости от уровня логирования
+        private string ApplyColorToLogEntry(string logEntry, LogLevel level)
         {
-            var listItem = new ListBoxItem
-            {
-                Content = logEntry,
-                Foreground = (Brush)new BrushConverter().ConvertFromString(color),
-                FontWeight = isBold ? FontWeights.Bold : FontWeights.Normal
-            };
-
-            _logListView.Items.Add(listItem);
-
-            // Автопрокрутка вниз
-            if (_logListView.Items.Count > 0)
-            {
-                _logListView.ScrollIntoView(_logListView.Items[_logListView.Items.Count - 1]);
-            }
+            string color = GetLogColor(level);
+            return $"<span style=\"color:{color}\">{logEntry}</span>";
         }
 
         // Выбор цвета логов в зависимости от уровня
@@ -82,39 +61,38 @@ namespace NewStandRPS.ViewModels
             {
                 return level switch
                 {
-                    LogLevel.Error => "#ffffff", // Белый
-                    LogLevel.Info => "#b4b4b4", // Серый
-                    LogLevel.Warning => "#ffffff", // Белый
-                    LogLevel.Debug => "#b4b4b4", // Серый
-                    LogLevel.Critical => "#b4b4b4", // Серый
-                    LogLevel.Success => "#ffffff", // Белый (для жирного текста)
-                    _ => "#b4b4b4",          // По умолчанию серый
+                    LogLevel.Error => "#ff0000",   // Красный для ошибок
+                    LogLevel.Info => "#000000",    // Черный для информации
+                    LogLevel.Warning => "#FFA500", // Оранжевый для предупреждений
+                    LogLevel.Debug => "#808080",   // Серый для отладки
+                    LogLevel.Critical => "#FF0000",// Ярко-красный для критических ошибок
+                    LogLevel.Success => "#008000", // Зеленый для успеха
+                    _ => "#000000",                // Черный по умолчанию
                 };
             }
             else
             {
                 return level switch
                 {
-                    LogLevel.Error => "#ff0000", // Красный
-                    LogLevel.Info => "#000000", // Черный
-                    LogLevel.Warning => "#ff0000", // Красный
-                    LogLevel.Debug => "#000000", // Черный
-                    LogLevel.Critical => "#0000CD", // Синий
-                    LogLevel.Success => "#000000", // Черный (для жирного текста)
-                    _ => "#000000",          // По умолчанию черный
+                    LogLevel.Error => "#ff0000",   // Красный для ошибок
+                    LogLevel.Info => "#ffffff",    // Белый для информации в темной теме
+                    LogLevel.Warning => "#FFFF00", // Желтый для предупреждений
+                    LogLevel.Debug => "#ffffff",   // Белый для отладки в темной теме
+                    LogLevel.Critical => "#FF0000",// Ярко-красный для критических ошибок
+                    LogLevel.Success => "#00FF00", // Зеленый для успеха в темной теме
+                    _ => "#ffffff",                // Белый по умолчанию для темной темы
                 };
             }
         }
     }
 
-    // Уровни логов
     public enum LogLevel
     {
-        Error, // Error
-        Info, // Info
-        Warning, // Warning
-        Debug, // Debug
-        Critical, // Critical
-        Success  // Success
+        Error,    // Ошибка
+        Info,     // Информация
+        Warning,  // Предупреждение
+        Debug,    // Отладка
+        Critical, // Критическая ошибка
+        Success   // Успех
     }
 }
