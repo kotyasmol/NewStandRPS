@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace NewStandRPS.ViewModels
 {
@@ -9,15 +10,15 @@ namespace NewStandRPS.ViewModels
     {
         private ObservableCollection<string> _logMessages;
         private string _logFilePath;
-        private bool _useDarkTheme = false; // Переключение темы 
+        private bool _useDarkTheme = false;
 
         public Logger(ObservableCollection<string> logMessages, string logFilePath)
         {
-            _logMessages = logMessages;
+            _logMessages = logMessages ?? new ObservableCollection<string>();  // Инициализация коллекции, если не передана
             _logFilePath = logFilePath;
         }
 
-        // Метод для логирования событий с уровнем логирования
+        // Метод для логирования с уровнями логирования
         public void Log(string message, LogLevel level)
         {
             string timestamp = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
@@ -26,10 +27,14 @@ namespace NewStandRPS.ViewModels
             // Запись в файл
             WriteLogToFile(logEntry);
 
-            // Добавление логов в коллекцию с цветом
-            string coloredLogEntry = ApplyColorToLogEntry(logEntry, level);
-            _logMessages.Add(coloredLogEntry);
+            // Добавляем в GUI через Dispatcher.Invoke (для многопоточности)
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                string coloredLogEntry = ApplyColorToLogEntry(logEntry, level);
+                _logMessages.Add(coloredLogEntry);
+            });
         }
+
 
         // Запись лога в файл
         private void WriteLogToFile(string logEntry)
@@ -43,18 +48,21 @@ namespace NewStandRPS.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка записи лога: {ex.Message}");
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show($"Ошибка записи лога: {ex.Message}");
+                });
             }
         }
 
-        // Применение цвета к логам в зависимости от уровня логирования
+        // Применение цвета к логам в зависимости от уровня
         private string ApplyColorToLogEntry(string logEntry, LogLevel level)
         {
             string color = GetLogColor(level);
             return $"<span style=\"color:{color}\">{logEntry}</span>";
         }
 
-        // Выбор цвета логов в зависимости от уровня
+        // Выбор цвета для логов
         private string GetLogColor(LogLevel level)
         {
             if (!_useDarkTheme)

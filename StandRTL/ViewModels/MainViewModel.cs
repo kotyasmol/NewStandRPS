@@ -27,13 +27,13 @@ namespace NewStandRPS.ViewModels
     {
 
 
-            private ModbusSerialMaster _modbusMaster;
-            private SerialPort _serialPort;
-            private Logger _logger;
+       private ModbusSerialMaster _modbusMaster;
+       private SerialPort _serialPort;
+       private Logger _logger;
 
 
-            private bool _isConnected;
-            public bool IsConnected
+       private bool _isConnected;
+       public bool IsConnected
             {
                 get => _isConnected;
                 private set
@@ -47,10 +47,10 @@ namespace NewStandRPS.ViewModels
             }
 
 
-            public ICommand SelectJsonFileCommand { get; }
-            public TestConfigModel Config { get; set; }
-            private string _jsonFilePath;
-            public string JsonFilePath
+        public ICommand SelectJsonFileCommand { get; }
+        public TestConfigModel Config { get; set; }
+        private string _jsonFilePath;
+        public string JsonFilePath
             {
                 get => _jsonFilePath;
                 set
@@ -63,7 +63,7 @@ namespace NewStandRPS.ViewModels
                     }
                 }
             }
-            private void SelectJsonFile(object parameter)
+        private void SelectJsonFile(object parameter)
             {
                 OpenFileDialog openFileDialog = new OpenFileDialog
                 {
@@ -77,7 +77,7 @@ namespace NewStandRPS.ViewModels
                 _logger.Log("Лог выбран.", LogLevel.Info);
             }
             }
-            private void LoadConfig()
+        private void LoadConfig()
             {
                 string jsonFilePath = JsonFilePath; // Используем путь, выбранный пользователем
                 if (string.IsNullOrEmpty(jsonFilePath))
@@ -141,7 +141,7 @@ namespace NewStandRPS.ViewModels
                 MaxRadiatorTemperature,       // 1318 - Установка максимальной температуры на радиаторе
                 StatisticsReset               // 1319 - Очистка статистики
             }
-            public enum StartAddressPlate // слейв 1
+        public enum StartAddressPlate // слейв 1
             {
                 DeviceType = 1000,              // 1000 - Тип устройства
                 HardwareVersion,                // 1001 - Аппаратная версия платы
@@ -166,13 +166,13 @@ namespace NewStandRPS.ViewModels
                 ACBCurrentADC,                  // 1020 - Ток через АКБ (АЦП)
                 TestMode                       // 1021 - Тестовый режим
             }
-            private ushort ReadRegister(byte slaveID, ushort registerAddress)
+        private ushort ReadRegister(byte slaveID, ushort registerAddress)
             {
                 ushort[] result = _modbusMaster.ReadHoldingRegisters(slaveID, registerAddress, 1);
                 return result[0];
 
             }
-            private void WriteRegister(byte slaveID, ushort registerAddress, int value)
+        private void WriteRegister(byte slaveID, ushort registerAddress, int value)
             {
                 try
                 {
@@ -184,7 +184,7 @@ namespace NewStandRPS.ViewModels
                     Log($"Ошибка при записи значения {value} в регистр {registerAddress} для устройства с ID {slaveID}: {ex.Message}");
                 }
             }
-            public void SetRpsPreheating(int value)
+        public void SetRpsPreheating(int value)
             {
                 Log($"Установка эквивалента температуры: {value}");
                 byte slaveID = 2;
@@ -193,11 +193,11 @@ namespace NewStandRPS.ViewModels
             }
 
 
-            public ICommand StartTestingCommand { get; }
-            private void StartTestCommandExecute(object parameter)
-            {
+        public ICommand StartTestingCommand { get; }
+        private void StartTestCommandExecute(object parameter)
+        {
                 StartTesting(1, Config);  // Вызов метода StartTesting
-            }
+        }
         public void StartTesting(byte slaveID, TestConfigModel config)
         {
             try
@@ -208,7 +208,7 @@ namespace NewStandRPS.ViewModels
                     Parity = Parity.None,
                     DataBits = 8,
                     StopBits = StopBits.One,
-                    ReadTimeout = 1000
+                    ReadTimeout = 3000
                 };
 
                 try
@@ -218,7 +218,6 @@ namespace NewStandRPS.ViewModels
                     _modbusMaster.Transport.Retries = 3;
                     IsConnected = true;
                     _logger.Log("Стенд подключен.", LogLevel.Info);
-                    ReadRegister(1, 1);
 
                     if (config.IsPreheatingTestEnabled)
                     {
@@ -974,36 +973,36 @@ namespace NewStandRPS.ViewModels
                     return false;
                 }
             }
-            private static bool ShowConfirmation(string message)
-            {
+        private static bool ShowConfirmation(string message)
+        {
                 var result = MessageBox.Show(message, "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 return result == MessageBoxResult.Yes;
-            }
-
-
-
-
-        public ObservableCollection<string> LogMessage { get; private set; } = new ObservableCollection<string>();
-        public MainViewModel()
-        {
-            _logger = new Logger(LogMessage, "C:/Users/kotyo/Desktop/log.txt");  // Инициализация логгера с ObservableCollection
-            SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
-            StartTestingCommand = new RelayCommand(StartTestCommandExecute);
         }
 
-        private void Log(string message)
+
+        public ObservableCollection<string> LogMessages { get; private set; }
+        public MainViewModel()
         {
-            //LogMessages.Add($"{DateTime.Now}: {message}");
+            LogMessages = new ObservableCollection<string>();  // Инициализация коллекции для логов
+            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/log.txt");  // Инициализация логгера с ObservableCollection
+
+            SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
+            StartTestingCommand = new RelayCommand(StartTestCommandExecute);
+
+            // Пример записи лога
+            _logger.Log("Программа запущена", LogLevel.Info);
+        }
+
+
+        private void Log(string message, LogLevel level = LogLevel.Info)
+        {
+            _logger.Log(message, level);
         }
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-
         public event PropertyChangedEventHandler PropertyChanged; // Для обновления GUI
-        public ObservableCollection<string> LogMessages { get; private set; }
-
-
         public void Dispose()
         {
             // 
