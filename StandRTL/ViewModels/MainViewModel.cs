@@ -19,6 +19,7 @@ using HandyControl.Tools;
 using Newtonsoft.Json.Linq;
 using Stylet.Logging;
 using System.Windows.Controls;
+using static NewStandRPS.ViewModels.Logger;
 
 namespace NewStandRPS.ViewModels
 {
@@ -980,11 +981,12 @@ namespace NewStandRPS.ViewModels
         }
 
 
-        public ObservableCollection<string> LogMessages { get; private set; }
+        public ObservableCollection<LogEntry> LogMessages { get; private set; }
+
         public MainViewModel()
         {
-            LogMessages = new ObservableCollection<string>();  // Инициализация коллекции для логов
-            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/log.txt");  // Инициализация логгера с ObservableCollection
+            LogMessages = new ObservableCollection<LogEntry>(); 
+            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/log.txt"); 
 
             SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
             StartTestingCommand = new RelayCommand(StartTestCommandExecute);
