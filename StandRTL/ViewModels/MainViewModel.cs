@@ -20,6 +20,9 @@ using Newtonsoft.Json.Linq;
 using Stylet.Logging;
 using System.Windows.Controls;
 using static NewStandRPS.ViewModels.Logger;
+using System.Windows.Media;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace NewStandRPS.ViewModels
 {
@@ -75,7 +78,7 @@ namespace NewStandRPS.ViewModels
                 if (openFileDialog.ShowDialog() == true)
                 {
                     JsonFilePath = openFileDialog.FileName;
-                _logger.Log("Лог выбран.", LogLevel.Info);
+                _logger.Log("Конфиг выбран.", LogLevel.Info);
             }
             }
         private void LoadConfig()
@@ -189,7 +192,7 @@ namespace NewStandRPS.ViewModels
             {
                 Log($"Установка эквивалента температуры: {value}");
                 byte slaveID = 2;
-                ushort registerAddress = (ushort)StartAddress.TemperatureSimulator; // 1304 имитатор термодатчика
+                ushort registerAddress = (ushort)StartAddress.TemperatureSimulator; 
                 WriteRegister(slaveID, registerAddress, value);
             }
 
@@ -197,81 +200,20 @@ namespace NewStandRPS.ViewModels
         public ICommand StartTestingCommand { get; }
         private void StartTestCommandExecute(object parameter)
         {
-                StartTesting(1, Config);  // Вызов метода StartTesting
+                StartTesting(Config);  // Вызов метода StartTesting
         }
-        public void StartTesting(byte slaveID, TestConfigModel config)
+        public void StartTesting(TestConfigModel config)
         {
             try
             {
-                _serialPort = new SerialPort("COM3")
+                // Пытаемся найти и подключиться к COM-порту
+                if (!TryConnectToComPort())
                 {
-                    BaudRate = 4800,
-                    Parity = Parity.None,
-                    DataBits = 8,
-                    StopBits = StopBits.One,
-                    ReadTimeout = 3000
-                };
-
-                try
-                {
-                    _serialPort.Open();
-                    _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
-                    _modbusMaster.Transport.Retries = 3;
-                    IsConnected = true;
-                    _logger.Log("Стенд подключен.", LogLevel.Info);
-
-                    if (config.IsPreheatingTestEnabled)
-                    {
-                        if (PreheatingTest(config))
-                        {
-                            _logger.Log("PREHEATING TEST ПРОЙДЕН", LogLevel.Info);
-                        }
-                        else
-                        {
-                            _logger.Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
-                        }
-                    }
-                    else
-                    {
-                        _logger.Log("PREHEATING TEST: НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
-                    }
-
-                    if (config.IsRknTestEnabled)
-                    {
-                        if (RknTest(config))
-                        {
-                            _logger.Log("RKN ТЕСТ ПРОЙДЕН", LogLevel.Info);
-                        }
-                        else
-                        {
-                            _logger.Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
-                        }
-                    }
-                    else
-                    {
-                        _logger.Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
-                    }
-
-                    if (config.IsBuildinTestEnabled)
-                    {
-                        if (SelfTest(config))
-                        {
-                            _logger.Log("Самотестирование успешно", LogLevel.Info);
-                        }
-                        else
-                        {
-                            _logger.Log("Самотестирование не пройдено", LogLevel.Error);
-                        }
-                    }
-                    else
-                    {
-                        _logger.Log("Самотестирование не проводилось", LogLevel.Warning);
-                    }
+                    return; // Если не удалось подключиться, прерываем тестирование
                 }
-                catch (Exception ex)
-                {
-                    _logger.Log($"Невозможно подключиться: {ex.Message}", LogLevel.Error);
-                }
+
+                // Выполнение тестов
+                RunTests(config);
             }
             catch (Exception ex)
             {
@@ -279,21 +221,249 @@ namespace NewStandRPS.ViewModels
             }
             finally
             {
-                if (_serialPort != null && _serialPort.IsOpen)
-                {
-                    _serialPort.Close();
-                    IsConnected = false;
-                    _logger.Log("Соединение закрыто.", LogLevel.Info);
-                }
-
-                WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
-                WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
-                WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1);
-                WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
-
-                _logger.Log("Все параметры стенда возвращены в исходное состояние.", LogLevel.Info);
+                CleanupResources();
             }
         }
+
+        private bool TryConnectToComPort()
+        {
+            string[] portNames = SerialPort.GetPortNames();
+
+            if (portNames.Length == 0)
+            {
+                _logger.Log("Нет доступных COM-портов", LogLevel.Error);
+                return false;
+            }
+
+            foreach (string portName in portNames)
+            {
+                try
+                {
+                    // Открытие и настройка COM-порта
+                    _serialPort = new SerialPort(portName)
+                    {
+                        BaudRate = 4800,
+                        Parity = Parity.None,
+                        DataBits = 8,
+                        StopBits = StopBits.One,
+                        ReadTimeout = 3000
+                    };
+
+                    _serialPort.Open();
+                    _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
+                    _modbusMaster.Transport.Retries = 3;
+
+                    // Логирование подключения
+                    _logger.Log($"Выбран и открыт COM-порт: {portName}", LogLevel.Info);
+
+                    // Проверка, откликается ли устройство на запросы
+                    if (TestDeviceConnection())
+                    {
+                        IsConnected = true;
+                        _logger.Log("Устройство успешно подключено и отвечает на запросы.", LogLevel.Success);
+                        return true;
+                    }
+                    else
+                    {
+                        _logger.Log($"Устройство на порту {portName} не откликается на запросы.", LogLevel.Warning);
+                        _serialPort.Close(); // Закрываем неудачное подключение
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    _logger.Log($"COM-порт {portName} занят другим устройством.", LogLevel.Warning);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log($"Ошибка при открытии COM-порта {portName}: {ex.Message}", LogLevel.Error);
+                }
+            }
+
+            _logger.Log("Не удалось найти доступное устройство на COM-портах", LogLevel.Error);
+            return false;
+        }
+
+        // Метод для проверки отклика устройства на запись/чтение регистра
+        private bool TestDeviceConnection()
+        {
+            int maxRetries = 3;  // Максимальное количество попыток
+            int retryCount = 0;
+
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    // Пишем тестовое значение в регистр (например, адрес 1300)
+                    ushort testValue = 1;
+                    _modbusMaster.WriteSingleRegister(1, 1300, testValue);
+
+                    // Читаем из того же регистра, чтобы проверить, что значение установилось
+                    ushort[] response = _modbusMaster.ReadHoldingRegisters(1, 1300, 1);
+
+                    if (response[0] == testValue)
+                    {
+                        // Возвращаем регистр в исходное состояние
+                        _modbusMaster.WriteSingleRegister(1, 1300, 0);
+                        return true; // Устройство откликнулось корректно
+                    }
+                    else
+                    {
+                        _logger.Log("Ошибка в данных регистра: некорректное значение.", LogLevel.Warning);
+                    }
+                }
+                catch (TimeoutException ex)
+                {
+                    _logger.Log($"Таймаут при попытке проверки устройства: {ex.Message}. Попытка {retryCount + 1} из {maxRetries}", LogLevel.Warning);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log($"Ошибка при проверке подключения устройства: {ex.Message}. Попытка {retryCount + 1} из {maxRetries}", LogLevel.Error);
+                }
+
+                retryCount++;
+                System.Threading.Thread.Sleep(1000);  // Пауза перед повторной попыткой
+            }
+
+            _logger.Log("Не удалось получить корректный отклик от устройства после нескольких попыток.", LogLevel.Error);
+            return false;  // После нескольких попыток устройство не откликнулось
+        }
+
+
+        private void RunTests(TestConfigModel config)
+        {
+            if (config.IsPreheatingTestEnabled)
+            {
+                if (PreheatingTest(config))
+                {
+                    _logger.Log("PREHEATING TEST ПРОЙДЕН", LogLevel.Success);
+                    PreheatingTestColor = Brushes.Green;
+                }
+                else
+                {
+                    _logger.Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
+                    PreheatingTestColor = Brushes.Red;
+                }
+            }
+            else
+            {
+                _logger.Log("PREHEATING TEST: НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
+                PreheatingTestColor = Brushes.Gray;
+            }
+
+            if (config.IsRknTestEnabled)
+            {
+                if (RknTest(config))
+                {
+                    _logger.Log("RKN ТЕСТ ПРОЙДЕН", LogLevel.Success);
+                    RknTestColor = Brushes.Green;
+                }
+                else
+                {
+                    _logger.Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
+                    RknTestColor = Brushes.Red;
+                }
+            }
+            else
+            {
+                _logger.Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
+                RknTestColor = Brushes.Gray;
+            }
+
+            if (config.IsBuildinTestEnabled)
+            {
+                if (SelfTest(config))
+                {
+                    _logger.Log("Самотестирование успешно", LogLevel.Success);
+                    SelfTestColor = Brushes.Green;
+                }
+                else
+                {
+                    _logger.Log("Самотестирование не пройдено", LogLevel.Error);
+                    SelfTestColor = Brushes.Red;
+                }
+            }
+            else
+            {
+                _logger.Log("Самотестирование не проводилось", LogLevel.Warning);
+                SelfTestColor = Brushes.Gray;
+            }
+        }
+
+        private void CleanupResources()
+        {
+            if (_serialPort != null && _serialPort.IsOpen)
+            {
+                _serialPort.Close();
+                IsConnected = false;
+                _logger.Log("Соединение закрыто.", LogLevel.Info);
+            }
+
+            WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
+            WriteRegister(2, (ushort)StartAddress.ACConnection, 0);
+            WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1);
+            WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
+
+            _logger.Log("Все параметры стенда возвращены в исходное состояние.", LogLevel.Info);
+        }
+
+
+        private bool _isMonitoring;
+        private CancellationTokenSource _cancellationTokenSource;
+
+        // Метод для запуска мониторинга состояния устройства
+        public void StartMonitoringDevice(TestConfigModel config)
+        {
+            _isMonitoring = true;
+            _cancellationTokenSource = new CancellationTokenSource();
+            Task.Run(() => MonitorDevice(config, _cancellationTokenSource.Token));
+        }
+
+        // Метод для остановки мониторинга
+        public void StopMonitoringDevice()
+        {
+            _isMonitoring = false;
+            _cancellationTokenSource?.Cancel();
+            _logger.Log("Мониторинг устройства остановлен.", LogLevel.Info);
+        }
+
+        // Метод, который постоянно проверяет связь с устройством
+        private async Task MonitorDevice(TestConfigModel config, CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (_isMonitoring && !cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        // Попытка чтения регистра устройства для проверки связи
+                        ushort[] response = _modbusMaster.ReadHoldingRegisters(1, 1300, 1); // Адрес регистра для чтения
+
+                        if (response != null && response.Length > 0)
+                        {
+                            _logger.Log($"Устройство отвечает. Текущее значение регистра: {response[0]}", LogLevel.Info);
+                        }
+                        else
+                        {
+                            _logger.Log("Устройство не отвечает или нет данных.", LogLevel.Warning);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Log($"Ошибка при чтении данных: {ex.Message}", LogLevel.Error);
+                        _isMonitoring = false; // Остановка мониторинга, если произошла ошибка
+                    }
+
+                    await Task.Delay(5000);  // Пауза 5 секунд перед следующим чтением
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.Log("Мониторинг устройства был прерван.", LogLevel.Warning);
+            }
+        }
+
+
+
 
         public bool PreheatingTest(TestConfigModel config)
             {
@@ -909,6 +1079,8 @@ namespace NewStandRPS.ViewModels
                     return false;
                 }
             }
+
+
         private bool CheckMinMaxParam(ushort registerAddress, int minValue, int maxValue, int delay)
         {
            try
@@ -985,8 +1157,8 @@ namespace NewStandRPS.ViewModels
 
         public MainViewModel()
         {
-            LogMessages = new ObservableCollection<LogEntry>(); 
-            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/log.txt"); 
+            LogMessages = new ObservableCollection<LogEntry>();
+            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/NewStandRPS/Logs/log.txt"); 
 
             SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
             StartTestingCommand = new RelayCommand(StartTestCommandExecute);
@@ -995,6 +1167,43 @@ namespace NewStandRPS.ViewModels
             _logger.Log("Программа запущена", LogLevel.Info);
         }
 
+
+
+        private Brush _rknTestColor = Brushes.LightGray;
+        private Brush _selfTestColor = Brushes.LightGray;
+
+        // Свойства для цветов плашек
+        private Brush _preheatingTestColor = Brushes.LightGray;
+        public Brush PreheatingTestColor
+        {
+            get => _preheatingTestColor;
+            set
+            {
+                if (_preheatingTestColor != value)
+                {
+                    _preheatingTestColor = value;
+                    OnPropertyChanged(nameof(PreheatingTestColor));
+                }
+            }
+        }
+        public Brush RknTestColor
+        {
+            get => _rknTestColor;
+            set
+            {
+                _rknTestColor = value;
+                OnPropertyChanged(nameof(RknTestColor));
+            }
+        }
+        public Brush SelfTestColor
+        {
+            get => _selfTestColor;
+            set
+            {
+                _selfTestColor = value;
+                OnPropertyChanged(nameof(SelfTestColor));
+            }
+        }
 
         private void Log(string message, LogLevel level = LogLevel.Info)
         {

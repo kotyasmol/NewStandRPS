@@ -38,7 +38,6 @@ namespace NewStandRPS.ViewModels
             string timestamp = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
             string logEntry = $"{timestamp}  {message}";
 
-            // Используем Serilog для записи в файл
             switch (level)
             {
                 case LogLevel.Error:

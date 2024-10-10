@@ -6,7 +6,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NewStandRPS"
         xmlns:viewmodels="clr-namespace:NewStandRPS.ViewModels" d:DataContext="{d:DesignInstance Type=viewmodels:MainViewModel}"
-           mc:Ignorable="d"
+        mc:Ignorable="d"
         Title="Stand Realtek" Width="1100" Height="720">
     <Grid>
         <Grid.RowDefinitions>
@@ -15,17 +15,34 @@
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="250"/>
+            <!-- Колонка для плашек -->
             <ColumnDefinition Width="300"/>
+            <!-- Колонка для кнопок -->
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Left" Margin="94,50,0,50">
-            <Button Width="150" Height="50" Content="Начать" Margin="10" Command="{Binding  StartTestingCommand}"/>
-            <Button Content="Выбрать JSON файл" Command="{Binding SelectJsonFileCommand}" Width="150" Height="50" />
-            <Button Width="150" Height="50" Content="Остановить" Margin="10"/>
-
+        <!-- Плашки (левее кнопок) -->
+        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical" Margin="10,50,0,50">
+            <Border Background="{Binding PreheatingTestColor}" CornerRadius="10" Padding="10" Margin="5">
+                <TextBlock Text="Preheating Test" HorizontalAlignment="Center"/>
+            </Border>
+            <Border Background="{Binding RknTestColor}" CornerRadius="10" Padding="10" Margin="5">
+                <TextBlock Text="RKN Test" HorizontalAlignment="Center"/>
+            </Border>
+            <Border Background="{Binding SelfTestColor}" CornerRadius="10" Padding="10" Margin="5">
+                <TextBlock Text="Самотестирование" HorizontalAlignment="Center"/>
+            </Border>
         </StackPanel>
 
-        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+        <!-- Кнопки (правее плашек) -->
+        <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Vertical" HorizontalAlignment="Left" Margin="10,50,0,50">
+            <Button Width="150" Height="50" Content="Начать" Margin="10" Command="{Binding StartTestingCommand}"/>
+            <Button Content="Выбрать JSON файл" Command="{Binding SelectJsonFileCommand}" Width="150" Height="50" />
+            <Button Width="150" Height="50" Content="Остановить" Margin="10"/>
+        </StackPanel>
+
+        <!-- Логи и другой контент -->
+        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="300"/>
                 <ColumnDefinition Width="*"/>
@@ -47,7 +64,7 @@
                 <ListBoxItem Content="Пинг"/>
                 <ListBoxItem Content="Пинг"/>
             </ListView>
-            
+
             <ListView Grid.Column="1" Margin="10" ItemsSource="{Binding LogMessages}" Style="{StaticResource ListView.Small}">
                 <ListView.ItemTemplate>
                     <DataTemplate>
@@ -55,9 +72,6 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-
-
-
         </Grid>
     </Grid>
 </hc:Window>
