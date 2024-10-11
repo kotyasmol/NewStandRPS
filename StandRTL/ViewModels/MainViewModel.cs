@@ -202,36 +202,40 @@ namespace NewStandRPS.ViewModels
         {
                 StartTesting(Config);  // Вызов метода StartTesting
         }
-        public void StartTesting(TestConfigModel config)
+        public async void StartTesting(TestConfigModel config)
         {
             try
             {
                 // Пытаемся найти и подключиться к COM-порту
-                if (!TryConnectToComPort())
+                if (!await TryConnectToComPortAsync())
                 {
                     return; // Если не удалось подключиться, прерываем тестирование
                 }
+
 
                 // Выполнение тестов
                 RunTests(config);
             }
             catch (Exception ex)
             {
-                _logger.Log($"Ошибка тестирования: {ex.Message}", LogLevel.Error);
+                Log($"Ошибка тестирования: {ex.Message}", LogLevel.Error);
             }
             finally
             {
-                CleanupResources();
+                StopMonitoringDevice();  // Остановка мониторинга перед очисткой ресурсов
+                CleanupResources();      // Очистка ресурсов (закрытие порта и возврат значений по умолчанию)
             }
         }
 
-        private bool TryConnectToComPort()
+
+
+        private async Task<bool> TryConnectToComPortAsync()
         {
             string[] portNames = SerialPort.GetPortNames();
 
             if (portNames.Length == 0)
             {
-                _logger.Log("Нет доступных COM-портов", LogLevel.Error);
+                Log("Нет доступных COM-портов", LogLevel.Error);
                 return false;
             }
 
@@ -254,78 +258,73 @@ namespace NewStandRPS.ViewModels
                     _modbusMaster.Transport.Retries = 3;
 
                     // Логирование подключения
-                    _logger.Log($"Выбран и открыт COM-порт: {portName}", LogLevel.Info);
+                    Log($"Выбран и открыт COM-порт: {portName}", LogLevel.Info);
 
                     // Проверка, откликается ли устройство на запросы
-                    if (TestDeviceConnection())
+                    if (await TestDeviceConnectionAsync())
                     {
                         IsConnected = true;
-                        _logger.Log("Устройство успешно подключено и отвечает на запросы.", LogLevel.Success);
+                        Log("Устройство успешно подключено и отвечает на запросы.", LogLevel.Success);
                         return true;
                     }
                     else
                     {
-                        _logger.Log($"Устройство на порту {portName} не откликается на запросы.", LogLevel.Warning);
+                        Log($"Устройство на порту {portName} не откликается на запросы.", LogLevel.Warning);
                         _serialPort.Close(); // Закрываем неудачное подключение
                     }
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    _logger.Log($"COM-порт {portName} занят другим устройством.", LogLevel.Warning);
+                    Log($"COM-порт {portName} занят другим устройством.", LogLevel.Warning);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Log($"Ошибка при открытии COM-порта {portName}: {ex.Message}", LogLevel.Error);
+                    Log($"Ошибка при открытии COM-порта {portName}: {ex.Message}", LogLevel.Error);
                 }
             }
 
-            _logger.Log("Не удалось найти доступное устройство на COM-портах", LogLevel.Error);
+            Log("Не удалось найти доступное устройство на COM-портах", LogLevel.Error);
             return false;
         }
-
-        // Метод для проверки отклика устройства на запись/чтение регистра
-        private bool TestDeviceConnection()
+        private async Task<bool> TestDeviceConnectionAsync()
         {
-            int maxRetries = 3;  // Максимальное количество попыток
-            int retryCount = 0;
-
-            while (retryCount < maxRetries)
+            try
             {
-                try
+                // Асинхронное чтение регистра (пример)
+                Task<ushort> readTask = Task.Run(() => ReadRegister(1, 1));
+
+                // Ждем 5 секунд (таймаут) и проверяем, завершилась ли задача
+                if (await Task.WhenAny(readTask, Task.Delay(5000)) == readTask)
                 {
-                    // Пишем тестовое значение в регистр (например, адрес 1300)
-                    ushort testValue = 1;
-                    _modbusMaster.WriteSingleRegister(1, 1300, testValue);
+                    ushort deviceType = readTask.Result;
 
-                    // Читаем из того же регистра, чтобы проверить, что значение установилось
-                    ushort[] response = _modbusMaster.ReadHoldingRegisters(1, 1300, 1);
+                    // Логирование типа устройства
+                    Log($"Устройство отвечает. Тип устройства: {deviceType}", LogLevel.Info);
 
-                    if (response[0] == testValue)
+                    switch (deviceType)
                     {
-                        // Возвращаем регистр в исходное состояние
-                        _modbusMaster.WriteSingleRegister(1, 1300, 0);
-                        return true; // Устройство откликнулось корректно
+                        case 1: _logger.Log("Тип устройства: EL-60", LogLevel.Success); break;
+                        case 2: _logger.Log("Тип устройства: PS-1", LogLevel.Success); break;
+                        case 3: _logger.Log("Тип устройства: PS-2", LogLevel.Success); break;
+                        case 4: _logger.Log("Тип устройства: EL-60v5", LogLevel.Success); break;
+                        case 5: _logger.Log("Тип устройства: IO-02", LogLevel.Success); break;
+                        case 6: _logger.Log("Тип устройства: Stand RPS-01", LogLevel.Success); break;
+                        default: _logger.Log($"Неизвестный тип устройства: {deviceType}", LogLevel.Warning); break;
                     }
-                    else
-                    {
-                        _logger.Log("Ошибка в данных регистра: некорректное значение.", LogLevel.Warning);
-                    }
-                }
-                catch (TimeoutException ex)
-                {
-                    _logger.Log($"Таймаут при попытке проверки устройства: {ex.Message}. Попытка {retryCount + 1} из {maxRetries}", LogLevel.Warning);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Log($"Ошибка при проверке подключения устройства: {ex.Message}. Попытка {retryCount + 1} из {maxRetries}", LogLevel.Error);
-                }
 
-                retryCount++;
-                System.Threading.Thread.Sleep(1000);  // Пауза перед повторной попыткой
+                    return true; // Устройство успешно откликнулось
+                }
+                else
+                {
+                    Log("Устройство не отвечает или нет данных в течение 5 секунд.", LogLevel.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Ошибка при проверке подключения устройства: {ex.Message}", LogLevel.Error);
             }
 
-            _logger.Log("Не удалось получить корректный отклик от устройства после нескольких попыток.", LogLevel.Error);
-            return false;  // После нескольких попыток устройство не откликнулось
+            return false;
         }
 
 
@@ -343,11 +342,7 @@ namespace NewStandRPS.ViewModels
                     _logger.Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
                     PreheatingTestColor = Brushes.Red;
                 }
-            }
-            else
-            {
-                _logger.Log("PREHEATING TEST: НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
-                PreheatingTestColor = Brushes.Gray;
+                Thread.Sleep(1000); // Пауза 1 секунда
             }
 
             if (config.IsRknTestEnabled)
@@ -362,11 +357,7 @@ namespace NewStandRPS.ViewModels
                     _logger.Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
                     RknTestColor = Brushes.Red;
                 }
-            }
-            else
-            {
-                _logger.Log("RKN ТЕСТ НЕ ПРОВОДИЛСЯ", LogLevel.Warning);
-                RknTestColor = Brushes.Gray;
+                Thread.Sleep(1000); // Пауза 1 секунда
             }
 
             if (config.IsBuildinTestEnabled)
@@ -382,12 +373,8 @@ namespace NewStandRPS.ViewModels
                     SelfTestColor = Brushes.Red;
                 }
             }
-            else
-            {
-                _logger.Log("Самотестирование не проводилось", LogLevel.Warning);
-                SelfTestColor = Brushes.Gray;
-            }
         }
+
 
         private void CleanupResources()
         {
@@ -395,7 +382,7 @@ namespace NewStandRPS.ViewModels
             {
                 _serialPort.Close();
                 IsConnected = false;
-                _logger.Log("Соединение закрыто.", LogLevel.Info);
+                Log("Соединение закрыто.", LogLevel.Info);
             }
 
             WriteRegister(2, (ushort)StartAddress.LatrConnection, 0);
@@ -403,20 +390,14 @@ namespace NewStandRPS.ViewModels
             WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 1);
             WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 4);
 
-            _logger.Log("Все параметры стенда возвращены в исходное состояние.", LogLevel.Info);
+            Log("Все параметры стенда возвращены в исходное состояние.", LogLevel.Info);
         }
 
 
         private bool _isMonitoring;
         private CancellationTokenSource _cancellationTokenSource;
 
-        // Метод для запуска мониторинга состояния устройства
-        public void StartMonitoringDevice(TestConfigModel config)
-        {
-            _isMonitoring = true;
-            _cancellationTokenSource = new CancellationTokenSource();
-            Task.Run(() => MonitorDevice(config, _cancellationTokenSource.Token));
-        }
+
 
         // Метод для остановки мониторинга
         public void StopMonitoringDevice()
@@ -427,40 +408,7 @@ namespace NewStandRPS.ViewModels
         }
 
         // Метод, который постоянно проверяет связь с устройством
-        private async Task MonitorDevice(TestConfigModel config, CancellationToken cancellationToken)
-        {
-            try
-            {
-                while (_isMonitoring && !cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        // Попытка чтения регистра устройства для проверки связи
-                        ushort[] response = _modbusMaster.ReadHoldingRegisters(1, 1300, 1); // Адрес регистра для чтения
 
-                        if (response != null && response.Length > 0)
-                        {
-                            _logger.Log($"Устройство отвечает. Текущее значение регистра: {response[0]}", LogLevel.Info);
-                        }
-                        else
-                        {
-                            _logger.Log("Устройство не отвечает или нет данных.", LogLevel.Warning);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Log($"Ошибка при чтении данных: {ex.Message}", LogLevel.Error);
-                        _isMonitoring = false; // Остановка мониторинга, если произошла ошибка
-                    }
-
-                    await Task.Delay(5000);  // Пауза 5 секунд перед следующим чтением
-                }
-            }
-            catch (TaskCanceledException)
-            {
-                _logger.Log("Мониторинг устройства был прерван.", LogLevel.Warning);
-            }
-        }
 
 
 
