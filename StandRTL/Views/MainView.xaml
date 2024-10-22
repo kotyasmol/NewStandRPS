@@ -65,7 +65,7 @@
                 <ListBoxItem Content="Пинг"/>
             </ListView>
 
-            <ListView Grid.Column="1" Margin="10" ItemsSource="{Binding LogMessages}" Style="{StaticResource ListView.Small}">
+            <ListView Grid.Column="1" Margin="10"  ItemsSource="{Binding LogMessages}" Style="{StaticResource ListView.Small}">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding Message}" Foreground="{Binding Color}" />

@@ -21,8 +21,6 @@ using Stylet.Logging;
 using System.Windows.Controls;
 using static NewStandRPS.ViewModels.Logger;
 using System.Windows.Media;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 
 namespace NewStandRPS.ViewModels
 {
@@ -34,6 +32,8 @@ namespace NewStandRPS.ViewModels
        private ModbusSerialMaster _modbusMaster;
        private SerialPort _serialPort;
        private Logger _logger;
+       private bool _isMonitoring;
+       private CancellationTokenSource _cancellationTokenSource;
 
 
        private bool _isConnected;
@@ -63,7 +63,7 @@ namespace NewStandRPS.ViewModels
                     {
                         _jsonFilePath = value;
                         OnPropertyChanged(nameof(JsonFilePath));
-                        LoadConfig(); // Загрузка конфигурации после выбора файла
+                        LoadConfig(); 
                     }
                 }
             }
@@ -83,7 +83,7 @@ namespace NewStandRPS.ViewModels
             }
         private void LoadConfig()
             {
-                string jsonFilePath = JsonFilePath; // Используем путь, выбранный пользователем
+                string jsonFilePath = JsonFilePath; 
                 if (string.IsNullOrEmpty(jsonFilePath))
                 {
                     Log("Путь к файлу конфигурации не задан. Пожалуйста, выберите файл конфигурации.");
@@ -99,7 +99,7 @@ namespace NewStandRPS.ViewModels
 
                         if (Config == null)
                         {
-                            Config = new TestConfigModel(); // Создаем пустой объект, чтобы избежать NullReferenceException
+                            Config = new TestConfigModel(); 
                             Log($"Файл конфигурации пуст или не может быть десериализован с использованием конфигурации по умолчанию.");
                         }
                         else
@@ -109,13 +109,13 @@ namespace NewStandRPS.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        Config = new TestConfigModel(); // Создаем пустой объект в случае ошибки десериализации
+                        Config = new TestConfigModel(); 
                         Log($"Не удалось загрузить конфигурацию: {ex.Message}");
                     }
                 }
                 else
                 {
-                    Config = new TestConfigModel(); // Создаем пустой объект, если файл не найден
+                    Config = new TestConfigModel(); 
                     Log("Файл конфигурации не найден. Использование конфигурации по умолчанию.");
                 }
             }
@@ -197,24 +197,51 @@ namespace NewStandRPS.ViewModels
             }
 
 
-        public ICommand StartTestingCommand { get; }
-        private void StartTestCommandExecute(object parameter)
+        public StandRegistersModel Registers { get; private set; }
+        private CancellationTokenSource _monitoringCancellationTokenSource;
+        public async Task StartMonitoring()
         {
-                StartTesting(Config);  // Вызов метода StartTesting
+            _monitoringCancellationTokenSource = new CancellationTokenSource();
+
+            try
+            {
+                while (!_monitoringCancellationTokenSource.Token.IsCancellationRequested)
+                {
+                    // Чтение регистров у Slave 2
+                    Registers.ACConnection = ReadRegister(2, (ushort)StartAddress.ACConnection);
+                    Registers.LatrConnection = ReadRegister(2, (ushort)StartAddress.LatrConnection);
+                    // Прочие регистры...
+
+                    // Чтение регистров у Slave 1
+                    Registers.DeviceType = ReadRegister(1, (ushort)StartAddressPlate.DeviceType);
+                    Registers.FirmwareVersion = ReadRegister(1, (ushort)StartAddressPlate.FirmwareVersion);
+                    // Прочие регистры...
+
+                    Log("Значения регистров обновлены.", LogLevel.Debug);
+                    await Task.Delay(1000);  // Ожидание 1 секунду перед следующим циклом
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Ошибка при мониторинге регистров: {ex.Message}", LogLevel.Error);
+            }
         }
-        public async void StartTesting(TestConfigModel config)
+
+        public void StopMonitoring()
+        {
+            _monitoringCancellationTokenSource?.Cancel();
+            Log("Мониторинг остановлен.", LogLevel.Info);
+        }
+        public async Task StartTestingAsync(TestConfigModel config)
         {
             try
             {
-                // Пытаемся найти и подключиться к COM-порту
-                if (!await TryConnectToComPortAsync())
+                if (!TryConnectToComPort())
                 {
                     return; // Если не удалось подключиться, прерываем тестирование
                 }
-
-
-                // Выполнение тестов
-                RunTests(config);
+ 
+                await RunTestsAsync(config); 
             }
             catch (Exception ex)
             {
@@ -222,159 +249,174 @@ namespace NewStandRPS.ViewModels
             }
             finally
             {
-                StopMonitoringDevice();  // Остановка мониторинга перед очисткой ресурсов
-                CleanupResources();      // Очистка ресурсов (закрытие порта и возврат значений по умолчанию)
+
+                CleanupResources(); 
             }
         }
 
-
-
-        private async Task<bool> TryConnectToComPortAsync()
-        {
-            string[] portNames = SerialPort.GetPortNames();
-
-            if (portNames.Length == 0)
-            {
-                Log("Нет доступных COM-портов", LogLevel.Error);
-                return false;
-            }
-
-            foreach (string portName in portNames)
-            {
-                try
-                {
-                    // Открытие и настройка COM-порта
-                    _serialPort = new SerialPort(portName)
-                    {
-                        BaudRate = 4800,
-                        Parity = Parity.None,
-                        DataBits = 8,
-                        StopBits = StopBits.One,
-                        ReadTimeout = 3000
-                    };
-
-                    _serialPort.Open();
-                    _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
-                    _modbusMaster.Transport.Retries = 3;
-
-                    // Логирование подключения
-                    Log($"Выбран и открыт COM-порт: {portName}", LogLevel.Info);
-
-                    // Проверка, откликается ли устройство на запросы
-                    if (await TestDeviceConnectionAsync())
-                    {
-                        IsConnected = true;
-                        Log("Устройство успешно подключено и отвечает на запросы.", LogLevel.Success);
-                        return true;
-                    }
-                    else
-                    {
-                        Log($"Устройство на порту {portName} не откликается на запросы.", LogLevel.Warning);
-                        _serialPort.Close(); // Закрываем неудачное подключение
-                    }
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    Log($"COM-порт {portName} занят другим устройством.", LogLevel.Warning);
-                }
-                catch (Exception ex)
-                {
-                    Log($"Ошибка при открытии COM-порта {portName}: {ex.Message}", LogLevel.Error);
-                }
-            }
-
-            Log("Не удалось найти доступное устройство на COM-портах", LogLevel.Error);
-            return false;
-        }
-        private async Task<bool> TestDeviceConnectionAsync()
+        private bool TryConnectToComPort()
         {
             try
             {
-                // Асинхронное чтение регистра (пример)
-                Task<ushort> readTask = Task.Run(() => ReadRegister(1, 1));
-
-                // Ждем 5 секунд (таймаут) и проверяем, завершилась ли задача
-                if (await Task.WhenAny(readTask, Task.Delay(5000)) == readTask)
+                _serialPort = new SerialPort("COM3")
                 {
-                    ushort deviceType = readTask.Result;
+                    BaudRate = 4800,
+                    Parity = Parity.None,
+                    DataBits = 8,
+                    StopBits = StopBits.One,
+                    ReadTimeout = 3000
+                };
 
-                    // Логирование типа устройства
-                    Log($"Устройство отвечает. Тип устройства: {deviceType}", LogLevel.Info);
+                _serialPort.Open();
+                _modbusMaster = ModbusSerialMaster.CreateRtu(_serialPort);
+                _modbusMaster.Transport.Retries = 3;
 
-                    switch (deviceType)
-                    {
-                        case 1: _logger.Log("Тип устройства: EL-60", LogLevel.Success); break;
-                        case 2: _logger.Log("Тип устройства: PS-1", LogLevel.Success); break;
-                        case 3: _logger.Log("Тип устройства: PS-2", LogLevel.Success); break;
-                        case 4: _logger.Log("Тип устройства: EL-60v5", LogLevel.Success); break;
-                        case 5: _logger.Log("Тип устройства: IO-02", LogLevel.Success); break;
-                        case 6: _logger.Log("Тип устройства: Stand RPS-01", LogLevel.Success); break;
-                        default: _logger.Log($"Неизвестный тип устройства: {deviceType}", LogLevel.Warning); break;
-                    }
+                Log("Выбран и открыт COM-порт: COM3", LogLevel.Info);
 
-                    return true; // Устройство успешно откликнулось
-                }
-                else
-                {
-                    Log("Устройство не отвечает или нет данных в течение 5 секунд.", LogLevel.Warning);
-                }
+                // Проверка, что устройство отвечает
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Log("COM-порт COM3 занят другим устройством.", LogLevel.Warning);
+                return false;
             }
             catch (Exception ex)
             {
-                Log($"Ошибка при проверке подключения устройства: {ex.Message}", LogLevel.Error);
+                Log($"Ошибка при открытии COM-порта COM3: {ex.Message}", LogLevel.Error);
+                return false;
             }
-
-            return false;
+        }
+        public async void StartTestCommandExecute(object parameter)
+        {
+            await StartTestingAsync(Config);  // Асинхронный вызов метода StartTestingAsync
+        }
+        #region асинхронная шляпа
+        private bool IsDeviceRpsStand()
+        {
+            // Логика для проверки, является ли устройство RPS_STAND
+            return Registers.DeviceType == 6; // Например, если тип устройства RPS_STAND = 6
         }
 
-
-        private void RunTests(TestConfigModel config)
+        private bool IsDeviceRpsStandV4()
         {
+            // Логика для проверки, является ли устройство RPS_STAND_V4
+            return Registers.DeviceType == 4; // Например, если тип устройства RPS_STAND_V4 = 4
+        }
+
+        // Пример метода для установки состояния ЛАТР
+        private async Task SetRpsLatrStateAsync(int state)
+        {
+            WriteRegister(2, (ushort)StartAddress.LatrConnection, state); // Запись состояния
+            Log($"Установка состояния ЛАТР: {state}", LogLevel.Info);
+        }
+
+        // Пример метода для установки состояния питания 380V
+        private async Task SetRps380StateAsync(int state)
+        {
+            WriteRegister(2, (ushort)StartAddress.ACConnection, state);
+            Log($"Установка состояния 380V: {state}", LogLevel.Info);
+        }
+
+        // Пример метода для установки значения нагрузки
+        private async Task SetRpsRloadValueAsync(int value)
+        {
+            WriteRegister(2, (ushort)StartAddress.ResistanceSetting, value);
+            Log($"Установка значения нагрузки: {value} Ом", LogLevel.Info);
+        }
+
+        // Пример метода для отключения реле
+        private async Task SetRpsRelay1Async(int state)
+        {
+            WriteRegister(1, (ushort)StartAddressPlate.OptoRelay, state);
+            Log($"Установка состояния реле 1: {state}", LogLevel.Info);
+        }
+
+        private async Task SetRpsRelay2Async(int state)
+        {
+            WriteRegister(1, (ushort)StartAddressPlate.Unused_AC_OKOptocoupler, state);
+            Log($"Установка состояния реле 2: {state}", LogLevel.Info);
+        }
+        #endregion
+        private async Task RunTestsAsync(TestConfigModel config)
+        {
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                Log("--------------------------------------------------", LogLevel.Info);
+                Log("Запуск теста RPS-01", LogLevel.Info);
+            });
+            StartMonitoring();
+            await SetRpsLatrStateAsync(0); 
+            //await Task.Delay(100);
+            //
+            if (IsDeviceRpsStand())
+            {
+                await SetRps380StateAsync(0); // Установка состояния питания 380V для RPS_STAND
+            }
+            else if (IsDeviceRpsStandV4())
+            {
+                await SetRps380StateAsync(0); // Установка состояния питания 380V для RPS_STAND_V4
+            }
+            await Task.Delay(100);
+            //await SetRpsRloadStateAsync(0); // ОтклSystem.Windows.Markup.XamlParseException: "Необходимо создать DependencySource в том же потоке, в котором создан DependencyObject."ючение нагрузки
+            await Task.Delay(100);
+            await SetRpsRloadValueAsync(100); // Установка значения нагрузки (100 Ом)
+            await Task.Delay(100);
+            await SetRpsRelay1Async(0); // Отключение реле 1
+            await Task.Delay(100);
+
+            // 7. Отключение реле 2
+            await SetRpsRelay2Async(0); // Отключение реле 2
+            await Task.Delay(100);
+
+
+
             if (config.IsPreheatingTestEnabled)
             {
-                if (PreheatingTest(config))
+                if (await PreheatingTestAsync(config)) // Асинхронный вызов PreheatingTest
                 {
-                    _logger.Log("PREHEATING TEST ПРОЙДЕН", LogLevel.Success);
+                    Log("PREHEATING TEST ПРОЙДЕН", LogLevel.Success);
                     PreheatingTestColor = Brushes.Green;
                 }
                 else
                 {
-                    _logger.Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
+                    Log("PREHEATING TEST: НЕ ПРОЙДЕН", LogLevel.Error);
                     PreheatingTestColor = Brushes.Red;
                 }
-                Thread.Sleep(1000); // Пауза 1 секунда
+
+                await Task.Delay(1000); 
             }
 
             if (config.IsRknTestEnabled)
             {
                 if (RknTest(config))
                 {
-                    _logger.Log("RKN ТЕСТ ПРОЙДЕН", LogLevel.Success);
+                    Log("RKN ТЕСТ ПРОЙДЕН", LogLevel.Success);
                     RknTestColor = Brushes.Green;
                 }
                 else
                 {
-                    _logger.Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
+                    Log("RKN ТЕСТ НЕ ПРОЙДЕН", LogLevel.Error);
                     RknTestColor = Brushes.Red;
                 }
-                Thread.Sleep(1000); // Пауза 1 секунда
+                Thread.Sleep(1000); 
             }
 
             if (config.IsBuildinTestEnabled)
             {
                 if (SelfTest(config))
                 {
-                    _logger.Log("Самотестирование успешно", LogLevel.Success);
+                    Log("Самотестирование успешно", LogLevel.Success);
                     SelfTestColor = Brushes.Green;
                 }
                 else
                 {
-                    _logger.Log("Самотестирование не пройдено", LogLevel.Error);
+                    Log("Самотестирование не пройдено", LogLevel.Error);
                     SelfTestColor = Brushes.Red;
                 }
             }
+            StopMonitoring();
         }
-
 
         private void CleanupResources()
         {
@@ -394,27 +436,10 @@ namespace NewStandRPS.ViewModels
         }
 
 
-        private bool _isMonitoring;
-        private CancellationTokenSource _cancellationTokenSource;
 
 
-
-        // Метод для остановки мониторинга
-        public void StopMonitoringDevice()
+        public async Task<bool> PreheatingTestAsync(TestConfigModel config)
         {
-            _isMonitoring = false;
-            _cancellationTokenSource?.Cancel();
-            _logger.Log("Мониторинг устройства остановлен.", LogLevel.Info);
-        }
-
-        // Метод, который постоянно проверяет связь с устройством
-
-
-
-
-
-        public bool PreheatingTest(TestConfigModel config)
-            {
                 try
                 {
                     // 1. Подготовка к тестированию
@@ -423,12 +448,20 @@ namespace NewStandRPS.ViewModels
                     WriteRegister(2, (ushort)StartAddress.LoadSwitchKey, 0);
                     WriteRegister(2, (ushort)StartAddress.ResistanceSetting, 100);
 
+                Application.Current.Dispatcher.Invoke(() =>
+                {
                     MessageBox.Show("Переведите джампер PREHEATING в положение YES", "Инструкция", MessageBoxButton.OK, MessageBoxImage.Information);
-                    Thread.Sleep(500);
-                    MessageBox.Show("Установите напряжение на ЛАТР 230В", "Инструкция", MessageBoxButton.OK, MessageBoxImage.Information);
+                });
+                
+                await Task.Delay(500);
 
-                    // 2. Установка температуры -30, Подключение ЛАТР и AC
-                    SetRpsPreheating(-30);
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    MessageBox.Show("Установите напряжение на ЛАТР 230В", "Инструкция", MessageBoxButton.OK, MessageBoxImage.Information);
+                });
+
+                // 2. Установка температуры -30, Подключение ЛАТР и AC
+                SetRpsPreheating(-30);
                     WriteRegister(2, (ushort)StartAddress.LatrConnection, 1);
                     WriteRegister(2, (ushort)StartAddress.ACConnection, 1);
 
@@ -1096,31 +1129,30 @@ namespace NewStandRPS.ViewModels
             }
         private static bool ShowConfirmation(string message)
         {
-                var result = MessageBox.Show(message, "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                var result = MessageBox.Show(message, "Инструкция", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 return result == MessageBoxResult.Yes;
         }
 
 
         public ObservableCollection<LogEntry> LogMessages { get; private set; }
-
+        public RelayCommand StartTestingCommand { get; }
         public MainViewModel()
         {
             LogMessages = new ObservableCollection<LogEntry>();
-            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/NewStandRPS/Logs/log.txt"); 
+            _logger = new Logger(LogMessages, "C:/Users/kotyo/Desktop/NewStandRPS/Logs/log.txt");
+            _logger.Log("Программа запущена", LogLevel.Info);
+            Registers = new StandRegistersModel(); 
 
             SelectJsonFileCommand = new RelayCommand(SelectJsonFile);
             StartTestingCommand = new RelayCommand(StartTestCommandExecute);
 
-            // Пример записи лога
-            _logger.Log("Программа запущена", LogLevel.Info);
+
         }
 
 
 
         private Brush _rknTestColor = Brushes.LightGray;
         private Brush _selfTestColor = Brushes.LightGray;
-
-        // Свойства для цветов плашек
         private Brush _preheatingTestColor = Brushes.LightGray;
         public Brush PreheatingTestColor
         {
@@ -1153,6 +1185,7 @@ namespace NewStandRPS.ViewModels
             }
         }
 
+
         private void Log(string message, LogLevel level = LogLevel.Info)
         {
             _logger.Log(message, level);
@@ -1164,7 +1197,6 @@ namespace NewStandRPS.ViewModels
         public event PropertyChangedEventHandler PropertyChanged; // Для обновления GUI
         public void Dispose()
         {
-            // 
         }
     }
 }
