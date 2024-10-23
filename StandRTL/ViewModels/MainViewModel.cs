@@ -171,17 +171,17 @@ namespace NewStandRPS.ViewModels
                 TestMode                       // 1021 - Тестовый режим
             }
         private ushort ReadRegister(byte slaveID, ushort registerAddress)
-            {
-                ushort[] result = _modbusMaster.ReadHoldingRegisters(slaveID, registerAddress, 1);
-                return result[0];
+        {
+            ushort[] result = _modbusMaster.ReadHoldingRegisters(slaveID, registerAddress, 1);
+            return result[0];
 
-            }
+        }
         private void WriteRegister(byte slaveID, ushort registerAddress, int value)
             {
                 try
                 {
                     _modbusMaster.WriteSingleRegister(slaveID, registerAddress, (ushort)value);
-                    Log($"Значение {value} успешно записано в регистр {registerAddress} для устройства с ID {slaveID}.");
+                    //Log($"Значение {value} успешно записано в регистр {registerAddress} для устройства с ID {slaveID}."); - работает корректно, но нахуй не надо в итоге логирование
                 }
                 catch (Exception ex)
                 {
@@ -205,17 +205,54 @@ namespace NewStandRPS.ViewModels
 
             try
             {
+                WriteRegister(2, 1301, 1);
+                await Task.Delay(1000);
                 while (!_monitoringCancellationTokenSource.Token.IsCancellationRequested)
                 {
                     // Чтение регистров у Slave 2
                     Registers.ACConnection = ReadRegister(2, (ushort)StartAddress.ACConnection);
                     Registers.LatrConnection = ReadRegister(2, (ushort)StartAddress.LatrConnection);
-                    // Прочие регистры...
+                    Registers.ACBConnection = ReadRegister(2, (ushort)StartAddress.ACBConnection);
+                    Registers.ACBPolarity = ReadRegister(2, (ushort)StartAddress.ACBPolarity);
+                    Registers.TemperatureSimulator = ReadRegister(2, (ushort)StartAddress.TemperatureSimulator);
+                    Registers.AC_OKRelayState = ReadRegister(2, (ushort)StartAddress.AC_OKRelayState);
+                    Registers.RelayState = ReadRegister(2, (ushort)StartAddress.RelayState);
+                    Registers.LoadSwitchKey = ReadRegister(2, (ushort)StartAddress.LoadSwitchKey);
+                    Registers.ResistanceSetting = ReadRegister(2, (ushort)StartAddress.ResistanceSetting);
+                    Registers.ACBVoltage = ReadRegister(2, (ushort)StartAddress.ACBVoltage);
+                    Registers.ACBAmperage = ReadRegister(2, (ushort)StartAddress.ACBAmperage);
+                    Registers.VPresenceAtEntrance = ReadRegister(2, (ushort)StartAddress.VPresenceAtEntrance);
+                    Registers.VPresenceAtExit = ReadRegister(2, (ushort)StartAddress.VPresenceAtExit);
+                    Registers.Sensor1Temperature = ReadRegister(2, (ushort)StartAddress.Sensor1Temperature);
+                    Registers.Sensor2Temperature = ReadRegister(2, (ushort)StartAddress.Sensor2Temperature);
+                    Registers.CoolerControlKey = ReadRegister(2, (ushort)StartAddress.CoolerControlKey);
+                    Registers.FanOffTemperature = ReadRegister(2, (ushort)StartAddress.FanOffTemperature);
+                    Registers.FanOnTemperature = ReadRegister(2, (ushort)StartAddress.FanOnTemperature);
+                    Registers.MaxRadiatorTemperature = ReadRegister(2, (ushort)StartAddress.MaxRadiatorTemperature);
+                    Registers.StatisticsReset = ReadRegister(2, (ushort)StartAddress.StatisticsReset);
 
                     // Чтение регистров у Slave 1
                     Registers.DeviceType = ReadRegister(1, (ushort)StartAddressPlate.DeviceType);
+                    Registers.HardwareVersion = ReadRegister(1, (ushort)StartAddressPlate.HardwareVersion);
                     Registers.FirmwareVersion = ReadRegister(1, (ushort)StartAddressPlate.FirmwareVersion);
-                    // Прочие регистры...
+                    Registers.PowerType = ReadRegister(1, (ushort)StartAddressPlate.PowerType);
+                    Registers.ACBVoltagePlate = ReadRegister(1, (ushort)StartAddressPlate.ACBVoltage);
+                    Registers.ChargingVoltage = ReadRegister(1, (ushort)StartAddressPlate.ChargingVoltage);
+                    Registers.ACBCurrent = ReadRegister(1, (ushort)StartAddressPlate.ACBCurrent);
+                    Registers.BoardTemperature = ReadRegister(1, (ushort)StartAddressPlate.BoardTemperature);
+                    Registers.BATLedStatus = ReadRegister(1, (ushort)StartAddressPlate.BATLedStatus);
+                    Registers.ACBConnectionSwitch = ReadRegister(1, (ushort)StartAddressPlate.ACBConnectionSwitch);
+                    Registers.ChargingSwitch = ReadRegister(1, (ushort)StartAddressPlate.ChargingSwitch);
+                    Registers.OptoRelay = ReadRegister(1, (ushort)StartAddressPlate.OptoRelay);
+                    Registers.FullDischargeVoltage = ReadRegister(1, (ushort)StartAddressPlate.FullDischargeVoltage);
+                    Registers.ACBLowVoltage = ReadRegister(1, (ushort)StartAddressPlate.ACBLowVoltage);
+                    Registers.BatteryRunTimeEstimate = ReadRegister(1, (ushort)StartAddressPlate.BatteryRunTimeEstimate);
+                    Registers.TestPassFlag = ReadRegister(1, (ushort)StartAddressPlate.TestPassFlag);
+                    Registers.BoardIdentifier = ReadRegister(1, (ushort)StartAddressPlate.BoardIdentifier);
+                    Registers.LTC4151HealthFlag = ReadRegister(1, (ushort)StartAddressPlate.LTC4151HealthFlag);
+                    Registers.ACBVoltageADC = ReadRegister(1, (ushort)StartAddressPlate.ACBVoltageADC);
+                    Registers.ACBCurrentADC = ReadRegister(1, (ushort)StartAddressPlate.ACBCurrentADC);
+                    Registers.TestMode = ReadRegister(1, (ushort)StartAddressPlate.TestMode);
 
                     Log("Значения регистров обновлены.", LogLevel.Debug);
                     await Task.Delay(1000);  // Ожидание 1 секунду перед следующим циклом
@@ -226,6 +263,7 @@ namespace NewStandRPS.ViewModels
                 Log($"Ошибка при мониторинге регистров: {ex.Message}", LogLevel.Error);
             }
         }
+
 
         public void StopMonitoring()
         {
@@ -291,53 +329,7 @@ namespace NewStandRPS.ViewModels
         {
             await StartTestingAsync(Config);  // Асинхронный вызов метода StartTestingAsync
         }
-        #region асинхронная шляпа
-        private bool IsDeviceRpsStand()
-        {
-            // Логика для проверки, является ли устройство RPS_STAND
-            return Registers.DeviceType == 6; // Например, если тип устройства RPS_STAND = 6
-        }
-
-        private bool IsDeviceRpsStandV4()
-        {
-            // Логика для проверки, является ли устройство RPS_STAND_V4
-            return Registers.DeviceType == 4; // Например, если тип устройства RPS_STAND_V4 = 4
-        }
-
-        // Пример метода для установки состояния ЛАТР
-        private async Task SetRpsLatrStateAsync(int state)
-        {
-            WriteRegister(2, (ushort)StartAddress.LatrConnection, state); // Запись состояния
-            Log($"Установка состояния ЛАТР: {state}", LogLevel.Info);
-        }
-
-        // Пример метода для установки состояния питания 380V
-        private async Task SetRps380StateAsync(int state)
-        {
-            WriteRegister(2, (ushort)StartAddress.ACConnection, state);
-            Log($"Установка состояния 380V: {state}", LogLevel.Info);
-        }
-
-        // Пример метода для установки значения нагрузки
-        private async Task SetRpsRloadValueAsync(int value)
-        {
-            WriteRegister(2, (ushort)StartAddress.ResistanceSetting, value);
-            Log($"Установка значения нагрузки: {value} Ом", LogLevel.Info);
-        }
-
-        // Пример метода для отключения реле
-        private async Task SetRpsRelay1Async(int state)
-        {
-            WriteRegister(1, (ushort)StartAddressPlate.OptoRelay, state);
-            Log($"Установка состояния реле 1: {state}", LogLevel.Info);
-        }
-
-        private async Task SetRpsRelay2Async(int state)
-        {
-            WriteRegister(1, (ushort)StartAddressPlate.Unused_AC_OKOptocoupler, state);
-            Log($"Установка состояния реле 2: {state}", LogLevel.Info);
-        }
-        #endregion
+      
         private async Task RunTestsAsync(TestConfigModel config)
         {
             await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -1065,7 +1057,7 @@ namespace NewStandRPS.ViewModels
         private bool CheckMinMaxParam(ushort registerAddress, int minValue, int maxValue, int delay)
         {
            try
-                {
+           {
                     ushort value = ReadRegister(1, registerAddress);
                     Log($"Считывание {registerAddress}: {value}");
 
@@ -1087,14 +1079,14 @@ namespace NewStandRPS.ViewModels
                     }
 
                     return false;
-                }
-                catch (Exception ex)
-                {
+           }
+           catch (Exception ex)
+           {
                     Log($"Ошибка при проверке параметров: {ex.Message}");
                     return false;
-                }
-            }
-        private bool CheckRpsParam(ushort registerAddress, int expectedValue, int delay)
+           }
+        }
+        private bool CheckRpsParam(ushort registerAddress, int expectedValue, int delay) //НАДО ПЕРЕДЕЛЫВАТЬ ЕПТАТЬ!) ЧТОБЫ БЫЛ ОПРОС НАХУЙ ИЗ МОДЕЛИ А НЕ ЧИТАЛ ПО ТУПОМУ
             {
                 try
                 {
@@ -1150,7 +1142,7 @@ namespace NewStandRPS.ViewModels
         }
 
 
-
+        #region цвета
         private Brush _rknTestColor = Brushes.LightGray;
         private Brush _selfTestColor = Brushes.LightGray;
         private Brush _preheatingTestColor = Brushes.LightGray;
@@ -1184,6 +1176,57 @@ namespace NewStandRPS.ViewModels
                 OnPropertyChanged(nameof(SelfTestColor));
             }
         }
+        #endregion
+        #region асинхронная шляпа
+        private bool IsDeviceRpsStand()
+        {
+            // Логика для проверки, является ли устройство RPS_STAND
+            return Registers.DeviceType == 6; // Например, если тип устройства RPS_STAND = 6
+        }
+
+        private bool IsDeviceRpsStandV4()
+        {
+            // Логика для проверки, является ли устройство RPS_STAND_V4
+            return Registers.DeviceType == 4; // Например, если тип устройства RPS_STAND_V4 = 4
+        }
+
+        // Пример метода для установки состояния ЛАТР
+        private async Task SetRpsLatrStateAsync(int state)
+        {
+            WriteRegister(2, (ushort)StartAddress.LatrConnection, state); // Запись состояния
+            Log($"Установка состояния ЛАТР: {state}", LogLevel.Info);
+        }
+
+        // Пример метода для установки состояния питания 380V
+        private async Task SetRps380StateAsync(int state)
+        {
+            WriteRegister(2, (ushort)StartAddress.ACConnection, state);
+            Log($"Установка состояния 380V: {state}", LogLevel.Info);
+        }
+
+        // Пример метода для установки значения нагрузки
+        private async Task SetRpsRloadValueAsync(int value)
+        {
+            WriteRegister(2, (ushort)StartAddress.ResistanceSetting, value);
+            Log($"Установка значения нагрузки: {value} Ом", LogLevel.Info);
+        }
+
+        // Пример метода для отключения реле
+        private async Task SetRpsRelay1Async(int state)
+        {
+            WriteRegister(1, (ushort)StartAddressPlate.OptoRelay, state);
+            Log($"Установка состояния реле 1: {state}", LogLevel.Info);
+        }
+
+        private async Task SetRpsRelay2Async(int state)
+        {
+            WriteRegister(1, (ushort)StartAddressPlate.Unused_AC_OKOptocoupler, state);
+            Log($"Установка состояния реле 2: {state}", LogLevel.Info);
+        }
+
+
+        #endregion
+
 
 
         private void Log(string message, LogLevel level = LogLevel.Info)
